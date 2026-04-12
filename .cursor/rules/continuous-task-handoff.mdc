@@ -1,0 +1,16 @@
+---
+description: After completing a task, continue the next task with full context without asking to proceed
+alwaysApply: true
+---
+
+# Continuous task handoff
+
+When working from a plan, checklist, PRD section, or ordered task list:
+
+1. **After a task is done** — Immediately continue with the **next** task in the same flow. Do not ask whether to continue, whether to start the next item, or whether to “share” scope for the new task.
+
+2. **Context** — Carry forward what the next task needs: relevant paths, prior decisions, and open files. Assume the user wants uninterrupted progress through the list until they change direction or say stop.
+
+3. **Exceptions** — Pause and ask only when something is **ambiguous**, **blocked** (missing credentials, destructive action needing confirmation), or the user explicitly asked for review between steps.
+
+This keeps multi-step implementation moving without redundant confirmation prompts.

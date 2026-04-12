@@ -1,0 +1,201 @@
+// TaskBridge — database schema aligned with docs/domain-model.md
+// https://www.prisma.io/docs/orm/reference/prisma-schema-reference
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Enums ---
+
+enum AuthProvider {
+  email
+  google
+}
+
+enum MembershipRole {
+  admin
+  member
+}
+
+enum MembershipStatus {
+  active
+  invited
+  removed
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum TaskPriority {
+  critical
+  high
+  medium
+  low
+}
+
+enum TaskStatus {
+  open
+  in_progress
+  completed
+  cancelled
+}
+
+enum TaskActivityEventType {
+  created
+  updated
+  assigned
+  status_changed
+  priority_changed
+  due_changed
+  completed
+  reopened
+  cancelled
+}
+
+// --- Models ---
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique @db.VarChar(320)
+  name         String       @db.VarChar(120)
+  avatarUrl    String?      @map("avatar_url")
+  authProvider AuthProvider @map("auth_provider")
+  /// Optional bcrypt hash when authProvider is email (Google users leave null)
+  passwordHash String?      @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships            Membership[]
+  invitationsSent        Invitation[]           @relation("InvitationInviter")
+  workspacesCreated      Workspace[]            @relation("WorkspaceCreator")
+  tasksAssigned          Task[]                 @relation("TaskAssignee")
+  tasksCreated           Task[]                 @relation("TaskCreator")
+  taskActivities         TaskActivity[]
+  notificationPreferences NotificationPreference[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(100)
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  creator                 User                     @relation("WorkspaceCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  memberships             Membership[]
+  invitations             Invitation[]
+  tasks                   Task[]
+  taskActivities          TaskActivity[]
+  notificationPreferences NotificationPreference[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String           @id @default(uuid()) @db.Uuid
+  workspaceId String           @map("workspace_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  role        MembershipRole
+  status      MembershipStatus
+  joinedAt    DateTime?        @map("joined_at") @db.Timestamptz(6)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id              String           @id @default(uuid()) @db.Uuid
+  workspaceId     String           @map("workspace_id") @db.Uuid
+  email           String           @db.VarChar(320)
+  token           String           @unique @db.VarChar(255)
+  invitedByUserId String           @map("invited_by_user_id") @db.Uuid
+  status          InvitationStatus
+  expiresAt       DateTime         @map("expires_at") @db.Timestamptz(6)
+  acceptedAt      DateTime?        @map("accepted_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@map("invitations")
+}
+
+model Task {
+  id             String       @id @default(uuid()) @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  title          String       @db.VarChar(200)
+  description    String?      @db.Text
+  priority       TaskPriority
+  status         TaskStatus
+  dueAt          DateTime?    @map("due_at") @db.Timestamptz(6)
+  assigneeUserId String       @map("assignee_user_id") @db.Uuid
+  creatorUserId  String       @map("creator_user_id") @db.Uuid
+  cancelReason   String?      @map("cancel_reason") @db.VarChar(500)
+  completedAt    DateTime?    @map("completed_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee  User           @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  creator   User           @relation("TaskCreator", fields: [creatorUserId], references: [id], onDelete: Restrict)
+  activities TaskActivity[]
+
+  @@index([workspaceId, status, dueAt])
+  @@index([workspaceId, assigneeUserId, dueAt])
+  @@index([workspaceId, creatorUserId, dueAt])
+  @@map("tasks")
+}
+
+model TaskActivity {
+  id          String                 @id @default(uuid()) @db.Uuid
+  workspaceId String                 @map("workspace_id") @db.Uuid
+  taskId      String                 @map("task_id") @db.Uuid
+  actorUserId String                 @map("actor_user_id") @db.Uuid
+  eventType   TaskActivityEventType  @map("event_type")
+  meta        Json                   @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor     User      @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@map("task_activities")
+}
+
+model NotificationPreference {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  channelPush  Boolean  @default(true) @map("channel_push")
+  channelEmail Boolean  @default(true) @map("channel_email")
+  onAssigned   Boolean  @default(true) @map("on_assigned")
+  onDue24h     Boolean  @default(true) @map("on_due_24h")
+  onOverdue    Boolean  @default(true) @map("on_overdue")
+  onCompleted  Boolean  @default(true) @map("on_completed")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("notification_preferences")
+}

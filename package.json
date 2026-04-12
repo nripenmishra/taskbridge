@@ -1,0 +1,23 @@
+{
+  "name": "taskbridge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TaskBridge web-first monorepo scaffold",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "echo \"Use npm run dev:api or npm run dev:web\"",
+    "dev:api": "npm run start:dev -w api",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w api && npm run build -w web",
+    "prisma:generate": "npm run prisma:generate -w api",
+    "prisma:migrate": "npm run prisma:migrate -w api",
+    "prisma:deploy": "npm run prisma:deploy -w api",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "check:stack": "echo \"Stack selected: Next.js + NestJS + PostgreSQL + Redis\""
+  }
+}

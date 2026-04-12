@@ -1,0 +1,622 @@
+openapi: 3.1.0
+info:
+  title: TaskBridge API
+  version: 1.0.0
+  description: Web-first API contract reusable by future mobile apps.
+
+servers:
+  - url: https://api.taskbridge.example.com
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Workspaces
+  - name: Invitations
+  - name: Tasks
+  - name: Activity
+  - name: Notifications
+
+paths:
+  /v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /v1/workspaces:
+    get:
+      tags: [Workspaces]
+      summary: List workspaces of current user
+      responses:
+        "200":
+          description: Workspaces
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Workspace"
+    post:
+      tags: [Workspaces]
+      summary: Create workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceInput"
+      responses:
+        "201":
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+
+  /v1/workspaces/{workspaceId}/members:
+    get:
+      tags: [Workspaces]
+      summary: List workspace members
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Membership"
+
+  /v1/workspaces/{workspaceId}/invitations:
+    post:
+      tags: [Invitations]
+      summary: Create workspace invitation (admin only)
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvitationInput"
+      responses:
+        "201":
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invitation"
+        "409":
+          description: Workspace member limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/invitations/accept:
+    post:
+      tags: [Invitations]
+      summary: Accept a pending invitation (Bearer token; user email must match invitation)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Invitation token from the invite email or admin API response
+      responses:
+        "200":
+          description: User joined the workspace
+        "404":
+          description: Invalid or expired invitation
+        "409":
+          description: Workspace full or already a member
+
+  /v1/workspaces/{workspaceId}/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks in workspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - in: query
+          name: view
+          schema:
+            type: string
+            enum: [assigned_to_me, assigned_by_me, completed, all]
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/TaskStatus"
+        - in: query
+          name: priority
+          schema:
+            $ref: "#/components/schemas/TaskPriority"
+        - in: query
+          name: assigneeUserId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: dueFrom
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: dueTo
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paginated tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTasks"
+    post:
+      tags: [Tasks]
+      summary: Create task
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskInput"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /v1/workspaces/{workspaceId}/tasks/{taskId}:
+    get:
+      tags: [Tasks]
+      summary: Get task
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/taskId"
+      responses:
+        "200":
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+    patch:
+      tags: [Tasks]
+      summary: Update task fields
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/taskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskInput"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /v1/workspaces/{workspaceId}/tasks/{taskId}/status:
+    post:
+      tags: [Tasks]
+      summary: Transition task status
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/taskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeTaskStatusInput"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "422":
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/workspaces/{workspaceId}/tasks/{taskId}/activity:
+    get:
+      tags: [Activity]
+      summary: List activity entries for a task
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+        - $ref: "#/components/parameters/taskId"
+      responses:
+        "200":
+          description: Activity list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TaskActivity"
+
+  /v1/workspaces/{workspaceId}/notification-preferences:
+    get:
+      tags: [Notifications]
+      summary: Get my notification preferences for workspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreference"
+    put:
+      tags: [Notifications]
+      summary: Update my notification preferences for workspace
+      parameters:
+        - $ref: "#/components/parameters/workspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationPreferenceInput"
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreference"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    workspaceId:
+      in: path
+      name: workspaceId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    taskId:
+      in: path
+      name: taskId
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    User:
+      type: object
+      required: [id, email, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+
+    Workspace:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    Membership:
+      type: object
+      required: [workspaceId, userId, role, status]
+      properties:
+        workspaceId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [admin, member]
+        status:
+          type: string
+          enum: [active, invited, removed]
+
+    Invitation:
+      type: object
+      required: [id, workspaceId, email, status, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [pending, accepted, expired, revoked]
+        expiresAt:
+          type: string
+          format: date-time
+
+    TaskStatus:
+      type: string
+      enum: [open, in_progress, completed, cancelled]
+
+    TaskPriority:
+      type: string
+      enum: [critical, high, medium, low]
+
+    Task:
+      type: object
+      required:
+        - id
+        - workspaceId
+        - title
+        - status
+        - priority
+        - assigneeUserId
+        - creatorUserId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        assigneeUserId:
+          type: string
+          format: uuid
+        creatorUserId:
+          type: string
+          format: uuid
+        cancelReason:
+          type: string
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TaskActivity:
+      type: object
+      required: [id, taskId, actorUserId, eventType, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+        actorUserId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum: [created, updated, assigned, status_changed, priority_changed, due_changed, completed, reopened, cancelled]
+        meta:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+
+    NotificationPreference:
+      type: object
+      required: [workspaceId, channelPush, channelEmail, onAssigned, onDue24h, onOverdue, onCompleted]
+      properties:
+        workspaceId:
+          type: string
+          format: uuid
+        channelPush:
+          type: boolean
+        channelEmail:
+          type: boolean
+        onAssigned:
+          type: boolean
+        onDue24h:
+          type: boolean
+        onOverdue:
+          type: boolean
+        onCompleted:
+          type: boolean
+
+    CreateWorkspaceInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    CreateInvitationInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    CreateTaskInput:
+      type: object
+      required: [title, assigneeUserId, priority]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        assigneeUserId:
+          type: string
+          format: uuid
+        dueAt:
+          type: string
+          format: date-time
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+
+    UpdateTaskInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        assigneeUserId:
+          type: string
+          format: uuid
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+
+    ChangeTaskStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        reason:
+          type: string
+          description: Required when status is cancelled.
+
+    UpdateNotificationPreferenceInput:
+      type: object
+      properties:
+        channelPush:
+          type: boolean
+        channelEmail:
+          type: boolean
+        onAssigned:
+          type: boolean
+        onDue24h:
+          type: boolean
+        onOverdue:
+          type: boolean
+        onCompleted:
+          type: boolean
+
+    PaginatedTasks:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: WORKSPACE_LIMIT_REACHED
+        message:
+          type: string
+        requestId:
+          type: string

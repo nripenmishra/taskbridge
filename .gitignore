@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment (do not commit secrets; keep .env.example files)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+
+# Build and caches
+dist/
+build/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Logs and coverage
+*.log
+npm-debug.log*
+coverage/
+.nyc_output/
