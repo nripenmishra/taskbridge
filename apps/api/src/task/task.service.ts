@@ -161,12 +161,24 @@ export class TaskService {
     if (view === 'assigned_to_me') {
       where.assigneeUserId = userId;
       if (query.status === undefined) {
-        where.status = { in: [TaskStatus.open, TaskStatus.in_progress] };
+        where.status = {
+          in: [
+            TaskStatus.open,
+            TaskStatus.in_progress,
+            TaskStatus.completed,
+          ],
+        };
       }
     } else if (view === 'assigned_by_me') {
       where.creatorUserId = userId;
       if (query.status === undefined) {
-        where.status = { in: [TaskStatus.open, TaskStatus.in_progress] };
+        where.status = {
+          in: [
+            TaskStatus.open,
+            TaskStatus.in_progress,
+            TaskStatus.completed,
+          ],
+        };
       }
     } else if (view === 'completed') {
       where.status = TaskStatus.completed;
@@ -194,12 +206,24 @@ export class TaskService {
     const onlyCompleted =
       view === 'completed' || query.status === TaskStatus.completed;
 
-    const orderBy: Prisma.TaskOrderByWithRelationInput[] = onlyCompleted
-      ? [{ completedAt: 'desc' }, { updatedAt: 'desc' }]
-      : [
-          { dueAt: { sort: 'asc', nulls: 'last' } },
-          { createdAt: 'asc' },
-        ];
+    let orderBy: Prisma.TaskOrderByWithRelationInput[];
+    if (onlyCompleted) {
+      orderBy = [{ completedAt: 'desc' }, { updatedAt: 'desc' }];
+    } else if (
+      (view === 'assigned_to_me' || view === 'assigned_by_me') &&
+      query.status === undefined
+    ) {
+      orderBy = [
+        { status: 'asc' },
+        { dueAt: { sort: 'asc', nulls: 'last' } },
+        { createdAt: 'asc' },
+      ];
+    } else {
+      orderBy = [
+        { dueAt: { sort: 'asc', nulls: 'last' } },
+        { createdAt: 'asc' },
+      ];
+    }
 
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.task.count({ where }),

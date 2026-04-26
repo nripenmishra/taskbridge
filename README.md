@@ -24,6 +24,8 @@ See `docs/stack-selection.md` for rationale and trade-offs.
 ## Run locally
 See `docs/task-5-scaffold.md` for `npm install`, `npm run infra:up`, `npm run prisma:deploy`, `npm run dev:api`, and `npm run dev:web`.
 
+**Test dashboard (web):** with both servers running, open `http://localhost:3000/register` or `/login`, then `http://localhost:3000/dashboard` — create a workspace, add tasks, and exercise status actions (assignee vs creator/admin rules match the API).
+
 ## Database (Prisma)
 - Schema: `apps/api/prisma/schema.prisma`
 - Migrations: `apps/api/prisma/migrations/`

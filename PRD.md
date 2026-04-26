@@ -4,12 +4,12 @@
 
 | Field | Value |
 |-------|--------|
-| **Document Version** | 2.0 — MVP scope refinements |
+| **Document Version** | 2.1 — MVP scope refinements |
 | **Date** | April 2026 |
 | **Status** | Draft — Pending Stakeholder Review |
 | **Product Owner** | [Your Name / Team] |
-| **Target Release** | v1.0 MVP (Phase 1) |
-| **Platforms** | Web, iOS, Android |
+| **Target Release** | v1.0 MVP (Phase 1 — Dashboard-first web) |
+| **Platforms** | Web (v1.0), iOS/Android (Phase 2) |
 
 **v2.0 summary:** All workspace members can see all tasks in the workspace; each workspace is limited to **5** members; MVP sends a **single deadline reminder at 24 hours** before due (48-hour advance reminder deferred).
 
@@ -85,21 +85,29 @@ TaskBridge is built for the following user profiles:
 
 ## 4. Product Scope
 
-### 4.1 In Scope — Phase 1 (MVP)
+### 4.1 In Scope — Phase 1 (MVP, dashboard-first)
 
-- User authentication and team/workspace management
+- User authentication and team/workspace management (email/password)
 - **Workspace size:** maximum **5** members per workspace (including the creator/admin); invites blocked at cap with clear messaging
 - **Task visibility:** **every member** of a workspace can see **all tasks** in that workspace (not limited to creator + assignee)
 - Task creation with title, description, assignee, due date, and priority
-- Unified task dashboard (assigned to me + assigned by me + completed)
-- Deadline proximity notifications (push + email): **MVP sends one reminder at 24 hours before due** (see Section 7)
-- Task status management (Open → In Progress → Completed)
-- Completed task history with filters
-- Basic activity feed / task audit trail
+- Unified task dashboard (assigned to me + assigned by me + completed) with basic filtering/sorting
+- Task status management (Open → In Progress → Completed / Cancelled) aligned with API contract
+- Completed task history with at least a basic completed view (date-sorted) and workspace-wide visibility
+- Security, hosting, custom domains, and workspace data isolation for production deployment (**P0**)
 
-### 4.2 In Scope — Phase 2 (Future Iterations)
+### 4.2 In Scope — Phase 1.5 (Fast follow after initial launch)
 
-- **48-hour advance deadline reminder** (in addition to the 24h reminder) — explicitly **deferred** from MVP (v2.0)
+- Push + email notifications for assignment, 24h-before-due reminder, overdue, completion (per Section 7)
+- Notification preferences UI + API (user-level toggles for push/email per notification type)
+- Google sign-in on the web app wired to existing Google OAuth endpoints
+- Workspace invitation + accept flows in the web app (admin sends invite; invitee joins workspace)
+- Per-task activity feed UI backed by TaskActivity (audit trail surfaced in the product)
+- Realtime task updates over WebSocket/Socket.IO from the API, as described in the HLD
+
+### 4.3 In Scope — Phase 2 (Future Iterations)
+
+- **48-hour advance deadline reminder** (in addition to the 24h reminder)
 - AI-powered calendar invite auto-creation when a task with a deadline is assigned
 - AI task extraction from emails (Gmail / Outlook integration)
 - AI task extraction from messages (Slack / Teams integration)
@@ -107,7 +115,7 @@ TaskBridge is built for the following user profiles:
 - Task dependencies and subtasks
 - Analytics dashboard (completion rates, overdue trends)
 
-### 4.3 Out of Scope
+### 4.4 Out of Scope
 
 - Full project management (Gantt charts, resource allocation, budgeting)
 - Time tracking
@@ -120,7 +128,7 @@ TaskBridge is built for the following user profiles:
 
 ### 5.1 Authentication & Onboarding
 
-- As a new user, I can sign up with email or a social login (Google) so I can start using TaskBridge quickly.
+- As a new user, I can sign up with email so I can start using TaskBridge quickly. (**Google sign-in moves to Phase 1.5.**)
 - As a user, I can create or join a workspace so my team or partners can collaborate in a shared environment.
 - As a workspace admin, I can invite team members via email link so they can join without a manual setup process, **subject to the workspace member limit (5)**.
 
@@ -140,15 +148,15 @@ TaskBridge is built for the following user profiles:
 - As a user, I can filter and sort tasks by due date, priority, assignee, or status.
 - As a user, I can switch to a 'Completed Tasks' view to review what has already been done.
 
-### 5.4 Notifications & Reminders
+### 5.4 Notifications & Reminders (Phase 1.5 and later)
 
-- As an assignee, I receive a push notification and email when a new task is assigned to me.
-- As an assignee, I receive a **reminder notification 24 hours before a task is due** (push and/or email per my preferences).
-- As an assignee, I receive an overdue notification if a task passes its deadline without being marked complete.
-- As a task creator, I receive a notification when an assignee marks my task complete.
-- As a user, I can configure my notification preferences (push, email, or both) in settings.
+- As an assignee, I receive a push notification and email when a new task is assigned to me. (**Phase 1.5**)
+- As an assignee, I receive a **reminder notification 24 hours before a task is due** (push and/or email per my preferences). (**Phase 1.5**)
+- As an assignee, I receive an overdue notification if a task passes its deadline without being marked complete. (**Phase 1.5**)
+- As a task creator, I receive a notification when an assignee marks my task complete. (**Phase 1.5**)
+- As a user, I can configure my notification preferences (push, email, or both) in settings. (**Phase 1.5**)
 
-**v2.0 note:** The **48-hour-before-due** reminder is **not** in MVP; it is planned for a later release (see Section 4.2).
+**Phase 2 note:** The **48-hour-before-due** reminder is **not** in Phase 1.x; it is planned for a later release (see Section 4.3).
 
 ### 5.5 Task Status Management
 
@@ -167,18 +175,18 @@ TaskBridge is built for the following user profiles:
 
 | ID | Feature | Description | Priority | Phase |
 |----|---------|-------------|----------|-------|
-| F-01 | User Auth | Email + Google OAuth sign-up/login with secure session management | P0 | 1 |
+| F-01 | User Auth | Email sign-up/login with secure session management; Google OAuth added in Phase 1.5 | P0 (email), P1.5 (Google) | 1 / 1.5 |
 | F-02 | Workspace Management | Create/join workspaces; invite via email link; admin role; **max 5 members per workspace** | P0 | 1 |
 | F-03 | Task Creation | Title, description, assignee, due date, priority, optional notes | P0 | 1 |
 | F-04 | Priority Levels | Four levels: Critical, High, Medium, Low with visual indicators | P0 | 1 |
 | F-05 | Task Assignment | Assign to any workspace member; self-assignment supported; **all members see all workspace tasks** | P0 | 1 |
 | F-06 | Unified Dashboard | Single view: Assigned To Me, Assigned By Me, tabs/filters | P0 | 1 |
 | F-07 | Task Status | Status lifecycle: Open → In Progress → Completed / Cancelled | P0 | 1 |
-| F-08 | Push Notifications | In-app + push on new assignment, **24h deadline reminder**, overdue | P0 | 1 |
-| F-09 | Email Notifications | Email on assignment, **24h reminder**, overdue | P1 | 1 |
+| F-08 | Push Notifications | In-app + push on new assignment, **24h deadline reminder**, overdue | P1.5 | 1.5 |
+| F-09 | Email Notifications | Email on assignment, **24h reminder**, overdue | P1.5 | 1.5 |
 | F-10 | Completed History | Filterable archive of all completed tasks with timestamps | P1 | 1 |
-| F-11 | Activity Feed | Per-task audit trail: status changes, edits, comments | P1 | 1 |
-| F-12 | Notification Prefs | User-level toggle: push, email, or both per notification type | P1 | 1 |
+| F-11 | Activity Feed | Per-task audit trail: status changes, edits, comments | P1.5 | 1.5 |
+| F-12 | Notification Prefs | User-level toggle: push, email, or both per notification type | P1.5 | 1.5 |
 | F-13 | Task Comments | Threaded comments on a task for back-and-forth context | P2 | 1 |
 | F-14 | Calendar Invite | Auto-create calendar event (Google / Outlook) when task assigned | P0 | 2 |
 | F-15 | Email → Task AI | Parse emails and suggest tasks with pre-filled fields | P1 | 2 |
@@ -243,15 +251,15 @@ Each task card in the list must surface at minimum: task title, assignee avatar,
 
 ### 9.1 Platform Support
 
-- **Web Application**: modern browsers (Chrome, Safari, Firefox, Edge — latest 2 versions)
-- **iOS**: iOS 16+
-- **Android**: Android 12+
+- **Web Application (Phase 1)**: modern browsers (Chrome, Safari, Firefox, Edge — latest 2 versions)
+- **iOS (Phase 2)**: iOS 16+
+- **Android (Phase 2)**: Android 12+
 
 ### 9.2 Architecture Considerations
 
-- **Real-time updates**: task status changes and new assignments should reflect instantly across all active sessions (WebSocket or equivalent).
+- **Real-time updates (Phase 1.5)**: task status changes and new assignments should reflect instantly across all active sessions (WebSocket or equivalent).
 - **Offline capability (Phase 2)**: mobile apps should queue status updates when offline and sync on reconnect.
-- **Notification infrastructure**: push via APNs (iOS) and FCM (Android); transactional email via a provider such as SendGrid or Postmark.
+- **Notification infrastructure (Phase 1.5+)**: push via APNs (iOS) and FCM (Android); transactional email via a provider such as SendGrid or Postmark.
 - **Data storage**: tasks, comments, and activity logs must be persisted with full audit trail capability.
 
 ### 9.3 Security & Privacy

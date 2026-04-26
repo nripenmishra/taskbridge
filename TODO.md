@@ -28,12 +28,24 @@ Update this file whenever you want. Use `- [ ]` for open items and `- [x]` for d
 
 ---
 
+## P0 launch checklist (Phase 1 — dashboard-first web)
+
+- [x] P0-1: Verify email auth + workspace creation work end to end from the web
+- [x] P0-2: Validate unified dashboard views and basic filters/sorting against PRD
+- [x] P0-3: Validate task lifecycle rules (status changes, cancel with reason) via UI
+- [x] P0-4: Verify workspace isolation and membership guards (no cross-workspace access)
+- [x] P0-5: Verify JWT expiry + refresh, logout, and basic password/security behavior
+- [ ] P0-6: Prepare and provision production infra (API, web, Postgres [+ Redis if used])
+- [ ] P0-7: Configure production domains and HTTPS for web and API
+- [ ] P0-8: Set up backups, logging, monitoring/health checks for production
+- [ ] P0-9: Define and test a repeatable build + deploy pipeline (including migrations)
+
 ## Other tasks
 
 _Add bullets below; copy the checkbox pattern._
 
+- [ ] **Push to GitHub** — create an empty repo on GitHub, then from this project run `git remote add origin <repo-url>` and `git push -u origin main` (local commits are already version control; this publishes them).
 - [ ] Example: run `npm run prisma:deploy` after pulling DB changes
-- [ ]
 
 ---
 
