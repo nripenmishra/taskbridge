@@ -28,6 +28,16 @@ type MemberRow = {
   status: string;
 };
 
+type InvitationResponse = {
+  id: string;
+  workspaceId: string;
+  email: string;
+  status: string;
+  expiresAt: string;
+  token: string;
+  inviteLink: string;
+};
+
 type TaskRow = {
   id: string;
   title: string;
@@ -77,6 +87,10 @@ export function DashboardClient() {
   const [cancelTaskId, setCancelTaskId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState<InvitationResponse | null>(null);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
 
   const currentRole = useMemo(() => {
     const w = workspaces.find((x) => x.id === workspaceId);
@@ -247,6 +261,43 @@ export function DashboardClient() {
     }
   }
 
+  async function createInvitation(e: FormEvent) {
+    e.preventDefault();
+    if (!workspaceId || !inviteEmail.trim()) return;
+    setInviting(true);
+    setActionError(null);
+    setInviteMessage(null);
+    try {
+      const res = await apiRequest<InvitationResponse>(
+        `/workspaces/${workspaceId}/invitations`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ email: inviteEmail.trim() }),
+        },
+      );
+      setInviteResult(res);
+      setInviteEmail('');
+      setInviteMessage('Invitation created successfully.');
+    } catch (err) {
+      setInviteResult(null);
+      setActionError(
+        err instanceof Error ? err.message : 'Could not create invitation',
+      );
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteResult?.inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteResult.inviteLink);
+      setInviteMessage('Invite link copied.');
+    } catch {
+      setInviteMessage('Could not copy link. Copy it manually.');
+    }
+  }
+
   async function changeStatus(
     task: TaskRow,
     status: TaskRow['status'],
@@ -337,6 +388,49 @@ export function DashboardClient() {
             {creatingWs ? 'Creating…' : 'Create workspace'}
           </button>
         </form>
+        {workspaceId && (
+          <div className="invite-panel">
+            <h3>Invitations</h3>
+            {currentRole === 'admin' ? (
+              <>
+                <form className="row-form" onSubmit={createInvitation}>
+                  <input
+                    type="email"
+                    placeholder="Invite by email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={inviting || !inviteEmail.trim()}
+                  >
+                    {inviting ? 'Sending…' : 'Send invite'}
+                  </button>
+                </form>
+                {inviteResult && (
+                  <div className="invite-result">
+                    <p className="muted small">
+                      Invite for <strong>{inviteResult.email}</strong>
+                    </p>
+                    <input readOnly value={inviteResult.inviteLink} />
+                    <div className="task-actions">
+                      <button type="button" onClick={copyInviteLink}>
+                        Copy link
+                      </button>
+                      <Link href={inviteResult.inviteLink}>Open link</Link>
+                    </div>
+                  </div>
+                )}
+                {inviteMessage && <p className="muted small">{inviteMessage}</p>}
+              </>
+            ) : (
+              <p className="muted small">
+                Only workspace admins can send invitations.
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       {workspaceId && (

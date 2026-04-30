@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getApiBase } from '@/lib/config';
@@ -8,11 +8,17 @@ import { setAuthSession } from '@/lib/auth-storage';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [nextPath, setNextPath] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get('next');
+    setNextPath(next);
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -41,7 +47,7 @@ export default function RegisterPage() {
         refreshToken: data.refreshToken,
         user: data.user,
       });
-      router.replace('/dashboard');
+      router.replace(nextPath || '/dashboard');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -92,7 +98,10 @@ export default function RegisterPage() {
           </button>
         </form>
         <p className="muted small">
-          Already have an account? <Link href="/login">Sign in</Link>
+          Already have an account?{' '}
+          <Link href={nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : '/login'}>
+            Sign in
+          </Link>
         </p>
       </div>
     </main>

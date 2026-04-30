@@ -32,5 +32,8 @@ See `docs/task-5-scaffold.md` for `npm install`, `npm run infra:up`, `npm run pr
 - **`DATABASE_URL`** must be available when Prisma runs. Scripts load **repo root** `.env` and then `apps/api/.env` (see `apps/api/package.json` `prisma:*` scripts). Keep `DATABASE_URL` in the root `.env` you created from `.env.example`.
 - After Postgres is up: `npm run prisma:generate` (runs on `npm install` via `postinstall` in `apps/api`) and `npm run prisma:deploy` to apply migrations.
 
+## Release runbook
+Use `docs/release-runbook.md` for the production release checklist and rollback process.
+
 ## Next Steps
 1. Implement vertical slices: auth → workspaces → tasks → notifications → realtime.

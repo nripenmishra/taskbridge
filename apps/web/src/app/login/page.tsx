@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getApiBase } from '@/lib/config';
@@ -8,10 +8,16 @@ import { setAuthSession } from '@/lib/auth-storage';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [nextPath, setNextPath] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get('next');
+    setNextPath(next);
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -38,7 +44,7 @@ export default function LoginPage() {
         refreshToken: data.refreshToken,
         user: data.user,
       });
-      router.replace('/dashboard');
+      router.replace(nextPath || '/dashboard');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -79,7 +85,10 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="muted small">
-          No account? <Link href="/register">Register</Link>
+          No account?{' '}
+          <Link href={nextPath ? `/register?next=${encodeURIComponent(nextPath)}` : '/register'}>
+            Register
+          </Link>
         </p>
         <p className="muted small">
           <Link href="/">Home</Link>

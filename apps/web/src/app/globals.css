@@ -211,6 +211,24 @@ label.inline select {
   min-width: 12rem;
 }
 
+.invite-panel {
+  margin-top: 1rem;
+  border-top: 1px solid #38444d;
+  padding-top: 1rem;
+}
+
+.invite-panel h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.invite-result {
+  margin-top: 0.75rem;
+  border: 1px dashed #38444d;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
 .task-form {
   display: flex;
   flex-direction: column;
