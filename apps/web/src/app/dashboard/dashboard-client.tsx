@@ -53,6 +53,24 @@ type TaskRow = {
   updatedAt: string;
 };
 
+type TaskActivityRow = {
+  id: string;
+  taskId: string;
+  actorUserId: string;
+  eventType:
+    | 'created'
+    | 'updated'
+    | 'assigned'
+    | 'status_changed'
+    | 'priority_changed'
+    | 'due_changed'
+    | 'completed'
+    | 'reopened'
+    | 'cancelled';
+  meta: Record<string, unknown>;
+  createdAt: string;
+};
+
 type TaskView = 'assigned_to_me' | 'assigned_by_me' | 'completed' | 'all';
 
 const PRIORITIES: TaskRow['priority'][] = [
@@ -87,6 +105,10 @@ export function DashboardClient() {
   const [cancelTaskId, setCancelTaskId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activityTaskId, setActivityTaskId] = useState<string | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityItems, setActivityItems] = useState<TaskActivityRow[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState<InvitationResponse | null>(null);
@@ -367,6 +389,39 @@ export function DashboardClient() {
     if (task) void changeStatus(task, 'cancelled', cancelReason.trim());
   }
 
+  async function openActivity(taskId: string) {
+    if (!workspaceId) return;
+    setActivityTaskId(taskId);
+    setActivityError(null);
+    setActivityLoading(true);
+    try {
+      const res = await apiRequest<{ items: TaskActivityRow[] }>(
+        `/workspaces/${workspaceId}/tasks/${taskId}/activity`,
+        { method: 'GET' },
+      );
+      setActivityItems(res.items);
+    } catch (err) {
+      setActivityItems([]);
+      setActivityError(
+        err instanceof Error ? err.message : 'Could not load activity',
+      );
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+
+  function closeActivity() {
+    setActivityTaskId(null);
+    setActivityItems([]);
+    setActivityError(null);
+  }
+
+  const membersById = useMemo(() => {
+    const map = new Map<string, MemberRow>();
+    for (const m of members) map.set(m.userId, m);
+    return map;
+  }, [members]);
+
   if (loading || !user) {
     return (
       <main className="dashboard-page">
@@ -577,6 +632,7 @@ export function DashboardClient() {
                       userId={user.id}
                       role={currentRole}
                       onStatus={changeStatus}
+                      onOpenActivity={openActivity}
                       onCancelClick={(id) => {
                         setCancelTaskId(id);
                         setCancelReason('');
@@ -617,6 +673,40 @@ export function DashboardClient() {
           </div>
         </div>
       )}
+
+      {activityTaskId && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal activity-modal">
+            <h3>Task activity</h3>
+            {activityLoading ? (
+              <p className="muted small">Loading activity…</p>
+            ) : activityError ? (
+              <p className="error">{activityError}</p>
+            ) : activityItems.length === 0 ? (
+              <p className="muted small">No activity recorded yet.</p>
+            ) : (
+              <ul className="activity-list">
+                {activityItems.map((item) => (
+                  <li key={item.id} className="activity-item">
+                    <strong>{eventLabel(item.eventType)}</strong>
+                    <p className="muted small">
+                      {membersById.get(item.actorUserId)?.name || item.actorUserId}
+                      {' · '}
+                      {new Date(item.createdAt).toLocaleString()}
+                    </p>
+                    <p className="muted small">{formatMeta(item.meta)}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="modal-actions">
+              <button type="button" onClick={closeActivity}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -626,12 +716,14 @@ function TaskActions({
   userId,
   role,
   onStatus,
+  onOpenActivity,
   onCancelClick,
 }: {
   task: TaskRow;
   userId: string;
   role: MembershipRole;
   onStatus: (task: TaskRow, status: TaskRow['status'], reason?: string) => void;
+  onOpenActivity: (taskId: string) => void;
   onCancelClick: (taskId: string) => void;
 }) {
   const isAssignee = task.assigneeUserId === userId;
@@ -644,6 +736,9 @@ function TaskActions({
 
   return (
     <div className="task-actions">
+      <button type="button" onClick={() => onOpenActivity(task.id)}>
+        View activity
+      </button>
       {isAssignee && task.status === 'open' && (
         <>
           <button
@@ -690,4 +785,37 @@ function TaskActions({
         )}
     </div>
   );
+}
+
+function eventLabel(eventType: TaskActivityRow['eventType']): string {
+  switch (eventType) {
+    case 'created':
+      return 'Task created';
+    case 'updated':
+      return 'Task updated';
+    case 'assigned':
+      return 'Assignee changed';
+    case 'status_changed':
+      return 'Status changed';
+    case 'priority_changed':
+      return 'Priority changed';
+    case 'due_changed':
+      return 'Due date changed';
+    case 'completed':
+      return 'Task completed';
+    case 'reopened':
+      return 'Task reopened';
+    case 'cancelled':
+      return 'Task cancelled';
+    default:
+      return eventType;
+  }
+}
+
+function formatMeta(meta: Record<string, unknown>): string {
+  const pairs = Object.entries(meta || {});
+  if (pairs.length === 0) return 'No additional details.';
+  return pairs
+    .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+    .join(' · ');
 }
