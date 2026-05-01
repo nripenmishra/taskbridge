@@ -281,7 +281,7 @@ export class WorkspaceService {
   private buildInviteLink(token: string): string {
     const base =
       process.env.PUBLIC_WEB_URL?.replace(/\/$/, '') ?? 'http://localhost:3000';
-    return `${base}/invite?token=${encodeURIComponent(token)}`;
+    return `${base}/invitations/accept?token=${encodeURIComponent(token)}`;
   }
 
   private async countSeats(db: DbClient, workspaceId: string): Promise<number> {
