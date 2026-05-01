@@ -182,6 +182,28 @@ export class WorkspaceService {
     });
   }
 
+  async listPendingInvitations(workspaceId: string) {
+    const rows = await this.prisma.invitation.findMany({
+      where: {
+        workspaceId,
+        status: InvitationStatus.pending,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      items: rows.map((invitation) => ({
+        id: invitation.id,
+        workspaceId: invitation.workspaceId,
+        email: invitation.email,
+        status: invitation.status,
+        expiresAt: invitation.expiresAt,
+        token: invitation.token,
+        inviteLink: this.buildInviteLink(invitation.token),
+      })),
+    };
+  }
+
   async acceptInvitation(userId: string, token: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {

@@ -53,4 +53,12 @@ export class WorkspaceController {
       dto.email,
     );
   }
+
+  @Get(':workspaceId/invitations')
+  @UseGuards(ActiveWorkspaceMemberGuard, WorkspaceAdminGuard)
+  listPendingInvitations(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ) {
+    return this.workspaceService.listPendingInvitations(workspaceId);
+  }
 }

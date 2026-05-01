@@ -261,9 +261,24 @@ export function DashboardClient() {
     }
   }
 
+  async function findPendingInvitationByEmail(
+    wid: string,
+    email: string,
+  ): Promise<InvitationResponse | null> {
+    const res = await apiRequest<{ items: InvitationResponse[] }>(
+      `/workspaces/${wid}/invitations`,
+      { method: 'GET' },
+    );
+    const target = email.trim().toLowerCase();
+    return (
+      res.items.find((x) => x.email.trim().toLowerCase() === target) ?? null
+    );
+  }
+
   async function createInvitation(e: FormEvent) {
     e.preventDefault();
     if (!workspaceId || !inviteEmail.trim()) return;
+    const normalizedEmail = inviteEmail.trim().toLowerCase();
     setInviting(true);
     setActionError(null);
     setInviteMessage(null);
@@ -272,13 +287,34 @@ export function DashboardClient() {
         `/workspaces/${workspaceId}/invitations`,
         {
           method: 'POST',
-          body: JSON.stringify({ email: inviteEmail.trim() }),
+          body: JSON.stringify({ email: normalizedEmail }),
         },
       );
       setInviteResult(res);
       setInviteEmail('');
       setInviteMessage('Invitation created successfully.');
     } catch (err) {
+      if (
+        err instanceof ApiError &&
+        err.code === 'INVITE_PENDING' &&
+        workspaceId
+      ) {
+        try {
+          const existing = await findPendingInvitationByEmail(
+            workspaceId,
+            normalizedEmail,
+          );
+          if (existing) {
+            setInviteResult(existing);
+            setInviteMessage(
+              'Invitation already pending. Re-share the existing link.',
+            );
+            return;
+          }
+        } catch {
+          // If lookup fails, fall back to default error below.
+        }
+      }
       setInviteResult(null);
       setActionError(
         err instanceof Error ? err.message : 'Could not create invitation',
