@@ -73,6 +73,32 @@ type TaskActivityRow = {
 
 type TaskView = 'assigned_to_me' | 'assigned_by_me' | 'completed' | 'all';
 
+type AgentIngestTokenRow = {
+  id: string;
+  label: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};
+
+type TaskSuggestionRow = {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  title: string;
+  description: string | null;
+  source: {
+    subject?: string;
+    from?: string;
+    messageId?: string;
+  };
+  proposedWorkspaceId: string | null;
+  proposedAssigneeUserId: string | null;
+  proposedPriority: TaskRow['priority'] | null;
+  proposedDueAt: string | null;
+  routingNotes: string | null;
+  createdAt: string;
+};
+
 const PRIORITIES: TaskRow['priority'][] = [
   'critical',
   'high',
@@ -113,6 +139,28 @@ export function DashboardClient() {
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState<InvitationResponse | null>(null);
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [agentTokenLabel, setAgentTokenLabel] = useState('');
+  const [creatingAgentToken, setCreatingAgentToken] = useState(false);
+  const [creatingTestSuggestion, setCreatingTestSuggestion] = useState(false);
+  const [agentTokens, setAgentTokens] = useState<AgentIngestTokenRow[]>([]);
+  const [newAgentToken, setNewAgentToken] = useState<string | null>(null);
+  const [agentMessage, setAgentMessage] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<TaskSuggestionRow[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsBusyId, setSuggestionsBusyId] = useState<string | null>(null);
+  const [reviewSuggestion, setReviewSuggestion] = useState<TaskSuggestionRow | null>(
+    null,
+  );
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewTitle, setReviewTitle] = useState('');
+  const [reviewDescription, setReviewDescription] = useState('');
+  const [reviewWorkspaceId, setReviewWorkspaceId] = useState('');
+  const [reviewAssigneeUserId, setReviewAssigneeUserId] = useState('');
+  const [reviewPriority, setReviewPriority] =
+    useState<TaskRow['priority']>('medium');
+  const [reviewDueAt, setReviewDueAt] = useState('');
+  const [reviewMembers, setReviewMembers] = useState<MemberRow[]>([]);
+  const [reviewMembersLoading, setReviewMembersLoading] = useState(false);
 
   const currentRole = useMemo(() => {
     const w = workspaces.find((x) => x.id === workspaceId);
@@ -170,6 +218,31 @@ export function DashboardClient() {
     [],
   );
 
+  const loadAgentTokens = useCallback(async () => {
+    const res = await apiRequest<{ items: AgentIngestTokenRow[] }>(
+      '/me/agent-ingest-tokens',
+      {
+        method: 'GET',
+      },
+    );
+    setAgentTokens(res.items);
+  }, []);
+
+  const loadSuggestions = useCallback(async () => {
+    setSuggestionsLoading(true);
+    try {
+      const res = await apiRequest<{ items: TaskSuggestionRow[] }>(
+        '/task-suggestions?status=pending',
+        {
+          method: 'GET',
+        },
+      );
+      setSuggestions(res.items);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const u = getStoredUser();
     if (!u) {
@@ -181,6 +254,8 @@ export function DashboardClient() {
     (async () => {
       try {
         await loadWorkspaces();
+        await loadAgentTokens();
+        await loadSuggestions();
       } catch (e) {
         if (!cancelled) {
           if (e instanceof ApiError && e.status === 401) {
@@ -197,7 +272,7 @@ export function DashboardClient() {
     return () => {
       cancelled = true;
     };
-  }, [loadWorkspaces, router]);
+  }, [loadAgentTokens, loadSuggestions, loadWorkspaces, router]);
 
   useEffect(() => {
     if (!workspaceId || !user) return;
@@ -353,6 +428,209 @@ export function DashboardClient() {
       setInviteMessage('Invite link copied.');
     } catch {
       setInviteMessage('Could not copy link. Copy it manually.');
+    }
+  }
+
+  async function createAgentToken(e: FormEvent) {
+    e.preventDefault();
+    setCreatingAgentToken(true);
+    setActionError(null);
+    setNewAgentToken(null);
+    setAgentMessage(null);
+    try {
+      const res = await apiRequest<{ token: string }>('/me/agent-ingest-tokens', {
+        method: 'POST',
+        body: JSON.stringify({
+          label: agentTokenLabel.trim() || undefined,
+        }),
+      });
+      setAgentTokenLabel('');
+      setNewAgentToken(res.token);
+      await loadAgentTokens();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Could not create agent token',
+      );
+    } finally {
+      setCreatingAgentToken(false);
+    }
+  }
+
+  async function createTestSuggestion() {
+    setCreatingTestSuggestion(true);
+    setActionError(null);
+    setAgentMessage(null);
+    try {
+      await apiRequest('/task-suggestions/test-ingest', {
+        method: 'POST',
+      });
+      setAgentMessage('Test suggestion created. Open Task suggestions below.');
+      await loadSuggestions();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Could not create test suggestion',
+      );
+    } finally {
+      setCreatingTestSuggestion(false);
+    }
+  }
+
+  async function copyAppsScriptTemplate() {
+    const apiBase =
+      process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000/v1';
+    const ingestUrl = `${apiBase.replace(/\/$/, '')}/integrations/gmail-agent/ingest`;
+    const template = [
+      `TASKBRIDGE_INGEST_URL=${ingestUrl}`,
+      'TASKBRIDGE_INGEST_TOKEN=<paste_token_here>',
+      'GEMINI_API_KEY=<paste_gemini_api_key>',
+      'GMAIL_QUERY=is:unread newer_than:2d',
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(template);
+      setAgentMessage('Apps Script property template copied.');
+    } catch {
+      setAgentMessage('Could not copy template. Paste values manually.');
+    }
+  }
+
+  async function revokeAgentToken(tokenId: string) {
+    setActionError(null);
+    try {
+      await apiRequest(`/me/agent-ingest-tokens/${tokenId}`, {
+        method: 'DELETE',
+      });
+      await loadAgentTokens();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Could not revoke agent token',
+      );
+    }
+  }
+
+  async function openSuggestionReview(item: TaskSuggestionRow) {
+    setReviewLoading(true);
+    setActionError(null);
+    try {
+      const full = await apiRequest<TaskSuggestionRow>(
+        `/task-suggestions/${item.id}`,
+        { method: 'GET' },
+      );
+      setReviewSuggestion(full);
+      setReviewTitle(full.title);
+      setReviewDescription(full.description ?? '');
+      setReviewWorkspaceId(full.proposedWorkspaceId || workspaceId || '');
+      setReviewAssigneeUserId(
+        full.proposedAssigneeUserId || assigneeUserId || '',
+      );
+      setReviewPriority(full.proposedPriority || 'medium');
+      setReviewDueAt(
+        full.proposedDueAt
+          ? new Date(full.proposedDueAt).toISOString().slice(0, 16)
+          : '',
+      );
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Could not load suggestion details',
+      );
+    } finally {
+      setReviewLoading(false);
+    }
+  }
+
+  function closeSuggestionReview() {
+    setReviewSuggestion(null);
+    setReviewTitle('');
+    setReviewDescription('');
+    setReviewWorkspaceId('');
+    setReviewAssigneeUserId('');
+    setReviewPriority('medium');
+    setReviewDueAt('');
+    setReviewMembers([]);
+    setReviewMembersLoading(false);
+  }
+
+  async function approveSuggestion() {
+    if (!reviewSuggestion || !reviewWorkspaceId || !reviewAssigneeUserId) return;
+    const suggestionId = reviewSuggestion.id;
+    setSuggestionsBusyId(suggestionId);
+    setActionError(null);
+    try {
+      await apiRequest(`/task-suggestions/${suggestionId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({
+          workspaceId: reviewWorkspaceId,
+          assigneeUserId: reviewAssigneeUserId,
+          priority: reviewPriority,
+          title: reviewTitle.trim(),
+          description: reviewDescription.trim() || undefined,
+          dueAt: reviewDueAt ? new Date(reviewDueAt).toISOString() : undefined,
+        }),
+      });
+      closeSuggestionReview();
+      await loadSuggestions();
+      await loadTasks(reviewWorkspaceId, view);
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Could not approve suggestion',
+      );
+    } finally {
+      setSuggestionsBusyId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!reviewSuggestion || !reviewWorkspaceId) {
+      setReviewMembers([]);
+      setReviewMembersLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setReviewMembersLoading(true);
+    (async () => {
+      try {
+        const res = await apiRequest<{ items: MemberRow[] }>(
+          `/workspaces/${reviewWorkspaceId}/members`,
+          { method: 'GET' },
+        );
+        if (cancelled) return;
+        const active = res.items.filter((m) => m.status === 'active');
+        setReviewMembers(active);
+        if (!active.some((m) => m.userId === reviewAssigneeUserId)) {
+          setReviewAssigneeUserId(active[0]?.userId || '');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setReviewMembers([]);
+          setActionError(
+            err instanceof Error
+              ? err.message
+              : 'Could not load workspace members for review',
+          );
+        }
+      } finally {
+        if (!cancelled) setReviewMembersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reviewSuggestion, reviewWorkspaceId, reviewAssigneeUserId]);
+
+  async function rejectSuggestion(suggestionId: string) {
+    setSuggestionsBusyId(suggestionId);
+    setActionError(null);
+    try {
+      await apiRequest(`/task-suggestions/${suggestionId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      await loadSuggestions();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Could not reject suggestion',
+      );
+    } finally {
+      setSuggestionsBusyId(null);
     }
   }
 
@@ -524,8 +802,130 @@ export function DashboardClient() {
         )}
       </section>
 
+      <section className="panel">
+        <h2>Agent integration</h2>
+        <p className="muted small">
+          Generate a personal ingest token for your Google Apps Script sender.
+        </p>
+        <form className="row-form" onSubmit={createAgentToken}>
+          <input
+            placeholder="Token label (optional)"
+            value={agentTokenLabel}
+            onChange={(e) => setAgentTokenLabel(e.target.value)}
+          />
+          <button type="submit" disabled={creatingAgentToken}>
+            {creatingAgentToken ? 'Generating…' : 'Generate token'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void createTestSuggestion()}
+            disabled={creatingTestSuggestion}
+          >
+            {creatingTestSuggestion ? 'Creating test…' : 'Test ingest'}
+          </button>
+          <button type="button" onClick={() => void copyAppsScriptTemplate()}>
+            Copy script template
+          </button>
+        </form>
+        {newAgentToken && (
+          <div className="invite-result">
+            <p className="muted small">
+              Copy now. For safety this plaintext token is shown only once.
+            </p>
+            <input readOnly value={newAgentToken} />
+          </div>
+        )}
+        {agentMessage && <p className="muted small">{agentMessage}</p>}
+        {agentTokens.length === 0 ? (
+          <p className="muted small">No tokens yet.</p>
+        ) : (
+          <ul className="task-list">
+            {agentTokens.map((token) => (
+              <li key={token.id} className="task-card">
+                <div className="task-main">
+                  <strong>{token.label || 'Untitled token'}</strong>
+                  <span className="badge subtle">
+                    {token.revokedAt ? 'revoked' : 'active'}
+                  </span>
+                </div>
+                <p className="muted small">
+                  Created {new Date(token.createdAt).toLocaleString()}
+                  {token.lastUsedAt
+                    ? ` · Last used ${new Date(token.lastUsedAt).toLocaleString()}`
+                    : ''}
+                </p>
+                {!token.revokedAt && (
+                  <div className="task-actions">
+                    <button
+                      type="button"
+                      className="danger-outline"
+                      onClick={() => revokeAgentToken(token.id)}
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {workspaceId && (
         <>
+          <section className="panel">
+            <h2>Task suggestions</h2>
+            <p className="muted small">
+              Pending suggestions from your Gmail agent. Approval creates a task
+              in the selected workspace.
+            </p>
+            {suggestionsLoading ? (
+              <p className="muted">Loading suggestions…</p>
+            ) : reviewLoading ? (
+              <p className="muted">Loading suggestion details…</p>
+            ) : suggestions.length === 0 ? (
+              <p className="muted">No pending suggestions.</p>
+            ) : (
+              <ul className="task-list">
+                {suggestions.map((item) => (
+                  <li key={item.id} className="task-card">
+                    <div className="task-main">
+                      <strong>{item.title}</strong>
+                      <span className="badge">{item.status}</span>
+                    </div>
+                    {item.description && (
+                      <p className="muted small">{item.description}</p>
+                    )}
+                    <p className="muted small">
+                      {item.source?.subject || 'No subject'} ·{' '}
+                      {item.source?.from || 'Unknown sender'}
+                    </p>
+                    {item.routingNotes && (
+                      <p className="muted small">{item.routingNotes}</p>
+                    )}
+                    <div className="task-actions">
+                      <button
+                        type="button"
+                        onClick={() => void openSuggestionReview(item)}
+                        disabled={suggestionsBusyId === item.id}
+                      >
+                        Review & approve
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-outline"
+                        onClick={() => rejectSuggestion(item.id)}
+                        disabled={suggestionsBusyId === item.id}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section className="panel">
             <h2>Create task</h2>
             <form className="task-form" onSubmit={createTask}>
@@ -644,6 +1044,121 @@ export function DashboardClient() {
             )}
           </section>
         </>
+      )}
+
+      {reviewSuggestion && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal">
+            <h3>Review suggestion</h3>
+            <p className="muted small">
+              Confirm and edit fields before creating a task.
+            </p>
+            <form
+              className="task-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void approveSuggestion();
+              }}
+            >
+              <label>
+                Title
+                <input
+                  value={reviewTitle}
+                  onChange={(e) => setReviewTitle(e.target.value)}
+                  required
+                  maxLength={200}
+                />
+              </label>
+              <label>
+                Description (optional)
+                <textarea
+                  value={reviewDescription}
+                  onChange={(e) => setReviewDescription(e.target.value)}
+                  rows={2}
+                />
+              </label>
+              <div className="row-2">
+                <label>
+                  Workspace
+                  <select
+                    value={reviewWorkspaceId}
+                    onChange={(e) => setReviewWorkspaceId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select workspace</option>
+                    {workspaces.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} ({w.role})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Assignee
+                  <select
+                    value={reviewAssigneeUserId}
+                    onChange={(e) => setReviewAssigneeUserId(e.target.value)}
+                    required
+                    disabled={reviewMembersLoading}
+                  >
+                    <option value="">Select member</option>
+                    {reviewMembers.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.name} ({m.email})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="row-2">
+                <label>
+                  Priority
+                  <select
+                    value={reviewPriority}
+                    onChange={(e) =>
+                      setReviewPriority(e.target.value as TaskRow['priority'])
+                    }
+                    required
+                  >
+                    {PRIORITIES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Due (optional)
+                  <input
+                    type="datetime-local"
+                    value={reviewDueAt}
+                    onChange={(e) => setReviewDueAt(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="modal-actions">
+                <button type="button" onClick={closeSuggestionReview}>
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    reviewLoading ||
+                    reviewMembersLoading ||
+                    suggestionsBusyId === reviewSuggestion.id ||
+                    !reviewWorkspaceId ||
+                    !reviewAssigneeUserId ||
+                    !reviewTitle.trim()
+                  }
+                >
+                  {suggestionsBusyId === reviewSuggestion.id
+                    ? 'Approving…'
+                    : 'Approve'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {cancelTaskId && (

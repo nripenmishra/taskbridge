@@ -17,6 +17,7 @@ tags:
   - name: Tasks
   - name: Activity
   - name: Notifications
+  - name: Integrations
 
 paths:
   /v1/auth/me:
@@ -133,6 +134,188 @@ paths:
           description: Invalid or expired invitation
         "409":
           description: Workspace full or already a member
+
+  /v1/integrations/gmail-agent/ingest:
+    post:
+      tags: [Integrations]
+      summary: Ingest a task suggestion from Gmail agent using personal ingest token
+      security: []
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer agent ingest token (not JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestTaskSuggestionInput"
+      responses:
+        "201":
+          description: Suggestion accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [duplicate, item]
+                properties:
+                  duplicate:
+                    type: boolean
+                  item:
+                    $ref: "#/components/schemas/TaskSuggestion"
+        "401":
+          description: Invalid or missing ingest token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/task-suggestions:
+    get:
+      tags: [Integrations]
+      summary: List my task suggestions
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Suggestions list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TaskSuggestion"
+
+  /v1/task-suggestions/{suggestionId}:
+    get:
+      tags: [Integrations]
+      summary: Get one task suggestion
+      parameters:
+        - $ref: "#/components/parameters/suggestionId"
+      responses:
+        "200":
+          description: Suggestion details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSuggestion"
+        "404":
+          description: Suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/task-suggestions/{suggestionId}/approve:
+    post:
+      tags: [Integrations]
+      summary: Approve suggestion and create a task
+      parameters:
+        - $ref: "#/components/parameters/suggestionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveTaskSuggestionInput"
+      responses:
+        "200":
+          description: Suggestion approved and task created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item, task]
+                properties:
+                  item:
+                    $ref: "#/components/schemas/TaskSuggestion"
+                  task:
+                    $ref: "#/components/schemas/Task"
+
+  /v1/task-suggestions/{suggestionId}/reject:
+    post:
+      tags: [Integrations]
+      summary: Reject a pending suggestion
+      parameters:
+        - $ref: "#/components/parameters/suggestionId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectTaskSuggestionInput"
+      responses:
+        "200":
+          description: Suggestion rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSuggestion"
+
+  /v1/me/agent-ingest-tokens:
+    get:
+      tags: [Integrations]
+      summary: List my agent ingest tokens
+      responses:
+        "200":
+          description: Token metadata list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgentIngestToken"
+    post:
+      tags: [Integrations]
+      summary: Create a new personal agent ingest token
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentIngestTokenInput"
+      responses:
+        "201":
+          description: Token created (plaintext returned once)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, item]
+                properties:
+                  token:
+                    type: string
+                  item:
+                    $ref: "#/components/schemas/AgentIngestToken"
+
+  /v1/me/agent-ingest-tokens/{tokenId}:
+    delete:
+      tags: [Integrations]
+      summary: Revoke a personal agent ingest token
+      parameters:
+        - $ref: "#/components/parameters/tokenId"
+      responses:
+        "200":
+          description: Token revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIngestToken"
 
   /v1/workspaces/{workspaceId}/tasks:
     get:
@@ -343,6 +526,20 @@ components:
       schema:
         type: string
         format: uuid
+    suggestionId:
+      in: path
+      name: suggestionId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    tokenId:
+      in: path
+      name: tokenId
+      required: true
+      schema:
+        type: string
+        format: uuid
 
   schemas:
     User:
@@ -492,6 +689,88 @@ components:
           type: string
           format: date-time
 
+    AgentIngestToken:
+      type: object
+      required: [id, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    TaskSuggestion:
+      type: object
+      required: [id, userId, status, title, source, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        source:
+          type: object
+          additionalProperties: true
+        dedupeKey:
+          type: string
+        proposedWorkspaceId:
+          type: string
+          format: uuid
+          nullable: true
+        proposedAssigneeUserId:
+          type: string
+          format: uuid
+          nullable: true
+        proposedPriority:
+          $ref: "#/components/schemas/TaskPriority"
+          nullable: true
+        proposedDueAt:
+          type: string
+          format: date-time
+          nullable: true
+        routingNotes:
+          type: string
+          nullable: true
+        routingConfidence:
+          type: number
+          nullable: true
+        resolvedTaskId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
     NotificationPreference:
       type: object
       required: [workspaceId, channelPush, channelEmail, onAssigned, onDue24h, onOverdue, onCompleted]
@@ -593,6 +872,75 @@ components:
           type: boolean
         onCompleted:
           type: boolean
+
+    CreateAgentIngestTokenInput:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 100
+
+    IngestTaskSuggestionInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        source:
+          type: object
+          properties:
+            messageId:
+              type: string
+              maxLength: 255
+            threadId:
+              type: string
+              maxLength: 255
+            from:
+              type: string
+              maxLength: 320
+            subject:
+              type: string
+              maxLength: 200
+            bodyPreview:
+              type: string
+              maxLength: 4000
+            receivedAt:
+              type: string
+              format: date-time
+          additionalProperties: false
+
+    ApproveTaskSuggestionInput:
+      type: object
+      required: [workspaceId, assigneeUserId, priority]
+      properties:
+        workspaceId:
+          type: string
+          format: uuid
+        assigneeUserId:
+          type: string
+          format: uuid
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 5000
+        dueAt:
+          type: string
+          format: date-time
+
+    RejectTaskSuggestionInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
 
     PaginatedTasks:
       type: object

@@ -61,6 +61,12 @@ enum TaskActivityEventType {
   cancelled
 }
 
+enum TaskSuggestionStatus {
+  pending
+  approved
+  rejected
+}
+
 // --- Models ---
 
 model User {
@@ -81,6 +87,8 @@ model User {
   tasksCreated           Task[]                 @relation("TaskCreator")
   taskActivities         TaskActivity[]
   notificationPreferences NotificationPreference[]
+  agentIngestTokens      AgentIngestToken[]
+  taskSuggestions        TaskSuggestion[]
 
   @@map("users")
 }
@@ -198,4 +206,45 @@ model NotificationPreference {
 
   @@unique([workspaceId, userId])
   @@map("notification_preferences")
+}
+
+model AgentIngestToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(128)
+  label      String?   @db.VarChar(100)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("agent_ingest_tokens")
+}
+
+model TaskSuggestion {
+  id                     String               @id @default(uuid()) @db.Uuid
+  userId                 String               @map("user_id") @db.Uuid
+  status                 TaskSuggestionStatus @default(pending)
+  title                  String               @db.VarChar(200)
+  description            String?              @db.Text
+  source                 Json                 @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  dedupeKey              String               @map("dedupe_key") @db.VarChar(255)
+  proposedWorkspaceId    String?              @map("proposed_workspace_id") @db.Uuid
+  proposedAssigneeUserId String?              @map("proposed_assignee_user_id") @db.Uuid
+  proposedPriority       TaskPriority?        @map("proposed_priority")
+  proposedDueAt          DateTime?            @map("proposed_due_at") @db.Timestamptz(6)
+  routingNotes           String?              @map("routing_notes") @db.VarChar(500)
+  routingConfidence      Float?               @map("routing_confidence")
+  resolvedTaskId         String?              @map("resolved_task_id") @db.Uuid
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  resolvedAt             DateTime?            @map("resolved_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, status, createdAt])
+  @@map("task_suggestions")
 }

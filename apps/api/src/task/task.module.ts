@@ -7,5 +7,6 @@ import { TaskService } from './task.service';
   imports: [WorkspaceModule],
   controllers: [TaskController],
   providers: [TaskService],
+  exports: [TaskService],
 })
 export class TaskModule {}

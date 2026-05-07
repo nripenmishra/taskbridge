@@ -35,5 +35,8 @@ See `docs/task-5-scaffold.md` for `npm install`, `npm run infra:up`, `npm run pr
 ## Release runbook
 Use `docs/release-runbook.md` for the production release checklist and rollback process.
 
+## Gmail agent integration
+Use `docs/gmail-agent-integration.md` for Apps Script sender setup and TaskBridge suggestion approval flow.
+
 ## Next Steps
 1. Implement vertical slices: auth → workspaces → tasks → notifications → realtime.
