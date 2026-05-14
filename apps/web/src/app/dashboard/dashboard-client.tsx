@@ -117,6 +117,7 @@ export function DashboardClient() {
   const [view, setView] = useState<TaskView>('assigned_to_me');
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
 
   const [newWsName, setNewWsName] = useState('');
   const [creatingWs, setCreatingWs] = useState(false);
@@ -483,6 +484,7 @@ export function DashboardClient() {
       `TASKBRIDGE_INGEST_URL=${ingestUrl}`,
       'TASKBRIDGE_INGEST_TOKEN=<paste_token_here>',
       'GEMINI_API_KEY=<paste_gemini_api_key>',
+      'GEMINI_MODEL=gemini-2.5-flash',
       'GMAIL_QUERY=is:unread newer_than:2d',
     ].join('\n');
     try {
@@ -716,6 +718,22 @@ export function DashboardClient() {
           <p className="muted small">
             Signed in as <strong>{user.name}</strong> ({user.email})
           </p>
+          {workspaces.length > 0 && (
+            <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span className="muted small">Workspace:</span>
+              <select
+                value={workspaceId ?? ''}
+                onChange={(e) => onWorkspaceChange(e.target.value)}
+                style={{ minWidth: '200px' }}
+              >
+                {workspaces.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <div className="dash-header-actions">
           <Link href="/">Home</Link>
@@ -728,40 +746,185 @@ export function DashboardClient() {
       {listError && <p className="error banner">{listError}</p>}
       {actionError && <p className="error banner">{actionError}</p>}
 
-      <section className="panel">
-        <h2>Workspace</h2>
-        {workspaces.length > 0 ? (
-          <label className="inline">
-            Active workspace
-            <select
-              value={workspaceId ?? ''}
-              onChange={(e) => onWorkspaceChange(e.target.value)}
-            >
-              {workspaces.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name} ({w.role})
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <p className="muted">No workspaces yet — create one below.</p>
-        )}
-        <form className="row-form" onSubmit={createWorkspace}>
-          <input
-            placeholder="New workspace name"
-            value={newWsName}
-            onChange={(e) => setNewWsName(e.target.value)}
-          />
-          <button type="submit" disabled={creatingWs || !newWsName.trim()}>
-            {creatingWs ? 'Creating…' : 'Create workspace'}
-          </button>
-        </form>
-        {workspaceId && (
-          <div className="invite-panel">
-            <h3>Invitations</h3>
-            {currentRole === 'admin' ? (
-              <>
+      <nav className="tab-nav">
+        <button
+          className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          Dashboard
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('settings')}
+        >
+          Settings
+        </button>
+      </nav>
+
+      {activeTab === 'dashboard' && (
+        <>
+          {workspaceId && (
+            <>
+              <section className="panel">
+                <h2>Create task</h2>
+                <form className="task-form" onSubmit={createTask}>
+                  <label>
+                    Title
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required
+                      maxLength={200}
+                    />
+                  </label>
+                  <label>
+                    Description (optional)
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={2}
+                    />
+                  </label>
+                  <div className="row-2">
+                    <label>
+                      Assignee
+                      <select
+                        value={assigneeUserId}
+                        onChange={(e) => setAssigneeUserId(e.target.value)}
+                        required
+                      >
+                        <option value="">Select member</option>
+                        {activeMembers.map((m) => (
+                          <option key={m.userId} value={m.userId}>
+                            {m.name} ({m.email})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Priority
+                      <select
+                        value={priority}
+                        onChange={(e) =>
+                          setPriority(e.target.value as TaskRow['priority'])
+                        }
+                      >
+                        {PRIORITIES.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label>
+                    Due (optional)
+                    <input
+                      type="datetime-local"
+                      value={dueAt}
+                      onChange={(e) => setDueAt(e.target.value)}
+                    />
+                  </label>
+                  <button type="submit" disabled={creatingTask}>
+                    {creatingTask ? 'Creating…' : 'Create task'}
+                  </button>
+                </form>
+              </section>
+
+              <section className="panel">
+                <div className="panel-head">
+                  <h2>Tasks ({total})</h2>
+                  <label className="inline">
+                    View
+                    <select
+                      value={view}
+                      onChange={(e) => setView(e.target.value as TaskView)}
+                    >
+                      <option value="assigned_to_me">Assigned to me</option>
+                      <option value="assigned_by_me">Assigned by me</option>
+                      <option value="completed">Completed</option>
+                      <option value="all">All</option>
+                    </select>
+                  </label>
+                </div>
+
+                {tasks.length === 0 ? (
+                  <p className="muted">No tasks in this view.</p>
+                ) : (
+                  <ul className="task-list">
+                    {tasks.map((task) => (
+                      <li key={task.id} className="task-card">
+                        <div className="task-main">
+                          <strong>{task.title}</strong>
+                          <span className="badges">
+                            <span className="badge">{task.status}</span>
+                            <span className={`badge ${task.priority}`}>{task.priority}</span>
+                          </span>
+                        </div>
+                        {task.dueAt && (
+                          <p className="muted small">
+                            Due {new Date(task.dueAt).toLocaleString()}
+                          </p>
+                        )}
+                        <TaskActions
+                          task={task}
+                          userId={user.id}
+                          role={currentRole}
+                          onStatus={changeStatus}
+                          onOpenActivity={openActivity}
+                          onCancelClick={(id) => {
+                            setCancelTaskId(id);
+                            setCancelReason('');
+                          }}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          )}
+        </>
+      )}
+
+      {activeTab === 'settings' && (
+        <>
+          <section className="panel">
+            <h2>Workspace Management</h2>
+            {workspaces.length > 0 ? (
+              <div>
+                <div className="invite-panel" style={{ borderTop: 'none', paddingTop: 0, marginTop: 0 }}>
+                  <h3>Create new workspace</h3>
+                  <form className="row-form" onSubmit={createWorkspace}>
+                    <input
+                      placeholder="Workspace name"
+                      value={newWsName}
+                      onChange={(e) => setNewWsName(e.target.value)}
+                      required
+                    />
+                    <button type="submit" disabled={creatingWs || !newWsName.trim()}>
+                      {creatingWs ? 'Creating…' : 'Create'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <form className="row-form" onSubmit={createWorkspace}>
+                <p className="muted small">No workspaces yet. Create one to get started.</p>
+                <input
+                  placeholder="Workspace name"
+                  value={newWsName}
+                  onChange={(e) => setNewWsName(e.target.value)}
+                  required
+                />
+                <button type="submit" disabled={creatingWs || !newWsName.trim()}>
+                  {creatingWs ? 'Creating…' : 'Create workspace'}
+                </button>
+              </form>
+            )}
+            {workspaceId && currentRole === 'admin' ? (
+              <div className="invite-panel">
+                <h3>Invitations</h3>
                 <form className="row-form" onSubmit={createInvitation}>
                   <input
                     type="email"
@@ -792,257 +955,139 @@ export function DashboardClient() {
                   </div>
                 )}
                 {inviteMessage && <p className="muted small">{inviteMessage}</p>}
-              </>
+              </div>
             ) : (
               <p className="muted small">
-                Only workspace admins can send invitations.
+                {workspaceId
+                  ? 'Only workspace admins can manage invitations.'
+                  : 'Select a workspace to manage invitations.'}
               </p>
             )}
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <h2>Agent integration</h2>
-        <p className="muted small">
-          Generate a personal ingest token for your Google Apps Script sender.
-        </p>
-        <form className="row-form" onSubmit={createAgentToken}>
-          <input
-            placeholder="Token label (optional)"
-            value={agentTokenLabel}
-            onChange={(e) => setAgentTokenLabel(e.target.value)}
-          />
-          <button type="submit" disabled={creatingAgentToken}>
-            {creatingAgentToken ? 'Generating…' : 'Generate token'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void createTestSuggestion()}
-            disabled={creatingTestSuggestion}
-          >
-            {creatingTestSuggestion ? 'Creating test…' : 'Test ingest'}
-          </button>
-          <button type="button" onClick={() => void copyAppsScriptTemplate()}>
-            Copy script template
-          </button>
-        </form>
-        {newAgentToken && (
-          <div className="invite-result">
-            <p className="muted small">
-              Copy now. For safety this plaintext token is shown only once.
-            </p>
-            <input readOnly value={newAgentToken} />
-          </div>
-        )}
-        {agentMessage && <p className="muted small">{agentMessage}</p>}
-        {agentTokens.length === 0 ? (
-          <p className="muted small">No tokens yet.</p>
-        ) : (
-          <ul className="task-list">
-            {agentTokens.map((token) => (
-              <li key={token.id} className="task-card">
-                <div className="task-main">
-                  <strong>{token.label || 'Untitled token'}</strong>
-                  <span className="badge subtle">
-                    {token.revokedAt ? 'revoked' : 'active'}
-                  </span>
-                </div>
-                <p className="muted small">
-                  Created {new Date(token.createdAt).toLocaleString()}
-                  {token.lastUsedAt
-                    ? ` · Last used ${new Date(token.lastUsedAt).toLocaleString()}`
-                    : ''}
-                </p>
-                {!token.revokedAt && (
-                  <div className="task-actions">
-                    <button
-                      type="button"
-                      className="danger-outline"
-                      onClick={() => revokeAgentToken(token.id)}
-                    >
-                      Revoke
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {workspaceId && (
-        <>
-          <section className="panel">
-            <h2>Task suggestions</h2>
-            <p className="muted small">
-              Pending suggestions from your Gmail agent. Approval creates a task
-              in the selected workspace.
-            </p>
-            {suggestionsLoading ? (
-              <p className="muted">Loading suggestions…</p>
-            ) : reviewLoading ? (
-              <p className="muted">Loading suggestion details…</p>
-            ) : suggestions.length === 0 ? (
-              <p className="muted">No pending suggestions.</p>
-            ) : (
-              <ul className="task-list">
-                {suggestions.map((item) => (
-                  <li key={item.id} className="task-card">
-                    <div className="task-main">
-                      <strong>{item.title}</strong>
-                      <span className="badge">{item.status}</span>
-                    </div>
-                    {item.description && (
-                      <p className="muted small">{item.description}</p>
-                    )}
-                    <p className="muted small">
-                      {item.source?.subject || 'No subject'} ·{' '}
-                      {item.source?.from || 'Unknown sender'}
-                    </p>
-                    {item.routingNotes && (
-                      <p className="muted small">{item.routingNotes}</p>
-                    )}
-                    <div className="task-actions">
-                      <button
-                        type="button"
-                        onClick={() => void openSuggestionReview(item)}
-                        disabled={suggestionsBusyId === item.id}
-                      >
-                        Review & approve
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-outline"
-                        onClick={() => rejectSuggestion(item.id)}
-                        disabled={suggestionsBusyId === item.id}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
           </section>
 
           <section className="panel">
-            <h2>Create task</h2>
-            <form className="task-form" onSubmit={createTask}>
-              <label>
-                Title
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                  maxLength={200}
-                />
-              </label>
-              <label>
-                Description (optional)
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={2}
-                />
-              </label>
-              <div className="row-2">
-                <label>
-                  Assignee
-                  <select
-                    value={assigneeUserId}
-                    onChange={(e) => setAssigneeUserId(e.target.value)}
-                    required
-                  >
-                    <option value="">Select member</option>
-                    {activeMembers.map((m) => (
-                      <option key={m.userId} value={m.userId}>
-                        {m.name} ({m.email})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Priority
-                  <select
-                    value={priority}
-                    onChange={(e) =>
-                      setPriority(e.target.value as TaskRow['priority'])
-                    }
-                  >
-                    {PRIORITIES.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label>
-                Due (optional)
-                <input
-                  type="datetime-local"
-                  value={dueAt}
-                  onChange={(e) => setDueAt(e.target.value)}
-                />
-              </label>
-              <button type="submit" disabled={creatingTask}>
-                {creatingTask ? 'Creating…' : 'Create task'}
+            <h2>Agent integration</h2>
+            <p className="muted small">
+              Generate a personal ingest token for your Google Apps Script sender.
+            </p>
+            <form className="row-form" onSubmit={createAgentToken}>
+              <input
+                placeholder="Token label (optional)"
+                value={agentTokenLabel}
+                onChange={(e) => setAgentTokenLabel(e.target.value)}
+              />
+              <button type="submit" disabled={creatingAgentToken}>
+                {creatingAgentToken ? 'Generating…' : 'Generate token'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void createTestSuggestion()}
+                disabled={creatingTestSuggestion}
+              >
+                {creatingTestSuggestion ? 'Creating test…' : 'Test ingest'}
+              </button>
+              <button type="button" onClick={() => void copyAppsScriptTemplate()}>
+                Copy script template
               </button>
             </form>
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <h2>Tasks ({total})</h2>
-              <label className="inline">
-                View
-                <select
-                  value={view}
-                  onChange={(e) => setView(e.target.value as TaskView)}
-                >
-                  <option value="assigned_to_me">Assigned to me</option>
-                  <option value="assigned_by_me">Assigned by me</option>
-                  <option value="completed">Completed</option>
-                  <option value="all">All</option>
-                </select>
-              </label>
-            </div>
-
-            {tasks.length === 0 ? (
-              <p className="muted">No tasks in this view.</p>
+            {newAgentToken && (
+              <div className="invite-result">
+                <p className="muted small">
+                  Copy now. For safety this plaintext token is shown only once.
+                </p>
+                <input readOnly value={newAgentToken} />
+              </div>
+            )}
+            {agentMessage && <p className="muted small">{agentMessage}</p>}
+            {agentTokens.length === 0 ? (
+              <p className="muted small">No tokens yet.</p>
             ) : (
               <ul className="task-list">
-                {tasks.map((task) => (
-                  <li key={task.id} className="task-card">
+                {agentTokens.map((token) => (
+                  <li key={token.id} className="task-card">
                     <div className="task-main">
-                      <strong>{task.title}</strong>
-                      <span className="badges">
-                        <span className="badge">{task.status}</span>
-                        <span className="badge subtle">{task.priority}</span>
+                      <strong>{token.label || 'Untitled token'}</strong>
+                      <span className="badge subtle">
+                        {token.revokedAt ? 'revoked' : 'active'}
                       </span>
                     </div>
-                    {task.dueAt && (
-                      <p className="muted small">
-                        Due {new Date(task.dueAt).toLocaleString()}
-                      </p>
+                    <p className="muted small">
+                      Created {new Date(token.createdAt).toLocaleString()}
+                      {token.lastUsedAt
+                        ? ` · Last used ${new Date(token.lastUsedAt).toLocaleString()}`
+                        : ''}
+                    </p>
+                    {!token.revokedAt && (
+                      <div className="task-actions">
+                        <button
+                          type="button"
+                          className="danger-outline"
+                          onClick={() => revokeAgentToken(token.id)}
+                        >
+                          Revoke
+                        </button>
+                      </div>
                     )}
-                    <TaskActions
-                      task={task}
-                      userId={user.id}
-                      role={currentRole}
-                      onStatus={changeStatus}
-                      onOpenActivity={openActivity}
-                      onCancelClick={(id) => {
-                        setCancelTaskId(id);
-                        setCancelReason('');
-                      }}
-                    />
                   </li>
                 ))}
               </ul>
             )}
           </section>
+
+          {workspaceId && (
+            <section className="panel">
+              <h2>Task suggestions</h2>
+              <p className="muted small">
+                Pending suggestions from your Gmail agent. Approval creates a task
+                in the selected workspace.
+              </p>
+              {suggestionsLoading ? (
+                <p className="muted">Loading suggestions…</p>
+              ) : reviewLoading ? (
+                <p className="muted">Loading suggestion details…</p>
+              ) : suggestions.length === 0 ? (
+                <p className="muted">No pending suggestions.</p>
+              ) : (
+                <ul className="task-list">
+                  {suggestions.map((item) => (
+                    <li key={item.id} className="task-card">
+                      <div className="task-main">
+                        <strong>{item.title}</strong>
+                        <span className="badge">{item.status}</span>
+                      </div>
+                      {item.description && (
+                        <p className="muted small">{item.description}</p>
+                      )}
+                      <p className="muted small">
+                        {item.source?.subject || 'No subject'} ·{' '}
+                        {item.source?.from || 'Unknown sender'}
+                      </p>
+                      {item.routingNotes && (
+                        <p className="muted small">{item.routingNotes}</p>
+                      )}
+                      <div className="task-actions">
+                        <button
+                          type="button"
+                          onClick={() => void openSuggestionReview(item)}
+                          disabled={suggestionsBusyId === item.id}
+                        >
+                          Review & approve
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-outline"
+                          onClick={() => rejectSuggestion(item.id)}
+                          disabled={suggestionsBusyId === item.id}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
         </>
       )}
 

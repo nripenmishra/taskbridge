@@ -79,11 +79,11 @@ label {
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.875rem;
-  color: #8b98a5;
+  color: #9ba8b4;
 }
 
 .muted {
-  color: #8b98a5;
+  color: #9ba8b4;
 }
 
 .muted.small,
@@ -159,6 +159,36 @@ label {
   display: flex;
   gap: 1rem;
   align-items: center;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #38444d;
+}
+
+.tab-button {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #9ba8b4;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-button:hover {
+  color: #e7e9ea;
+}
+
+.tab-button.active {
+  color: #1d9bf0;
+  border-bottom-color: #1d9bf0;
 }
 
 .panel {
@@ -260,7 +290,7 @@ label.inline select {
   border: 1px solid #38444d;
   border-radius: 10px;
   padding: 1rem;
-  background: #0f1419;
+  background: #1c2128;
 }
 
 .task-main {
@@ -290,6 +320,27 @@ label.inline select {
 .badge.subtle {
   background: #2f3336;
   color: #c4cfd6;
+}
+
+/* Priority badge colors */
+.badge.critical {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.badge.high {
+  background: #92400e;
+  color: #fde047;
+}
+
+.badge.medium {
+  background: #7c2d12;
+  color: #fed7aa;
+}
+
+.badge.low {
+  background: #374151;
+  color: #d1d5db;
 }
 
 .task-actions {
@@ -375,6 +426,6 @@ label.inline select {
 
 .modal-actions button:first-child {
   background: transparent;
-  color: #8b98a5;
+  color: #9ba8b4;
   border-color: #38444d;
 }
