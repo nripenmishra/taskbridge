@@ -165,7 +165,6 @@ export class TaskService {
           in: [
             TaskStatus.open,
             TaskStatus.in_progress,
-            TaskStatus.completed,
           ],
         };
       }
@@ -176,7 +175,6 @@ export class TaskService {
           in: [
             TaskStatus.open,
             TaskStatus.in_progress,
-            TaskStatus.completed,
           ],
         };
       }
